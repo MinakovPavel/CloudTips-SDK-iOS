@@ -7,7 +7,7 @@
 //
 
 import Alamofire
-import AlamofireObjectMapper
+//import AlamofireObjectMapper
 import ObjectMapper
 
 public class CloudtipsApi {
@@ -83,42 +83,35 @@ public class CloudtipsApi {
 
 extension CloudtipsApi {
     
-    func makeObjectRequest<T: BaseMappable>(_ request: HTTPRequest, completion: HTTPRequestCompletion<T>?) {
+    func makeObjectRequest<T: Mappable>(_ request: HTTPRequest, completion: HTTPRequestCompletion<T>?) {
         let url = (try? request.resource.asURL())?.absoluteString ?? ""
         
         print("--------------------------")
         print("sending request: \(url)")
         print("parameters: \(request.parameters as NSDictionary?)")
         print("--------------------------")
-        
-        validatedDataRequest(from: request).responseObject { (dataResponse) in
-//            if let data = dataResponse.data, let dataStr = String.init(data: data, encoding: .utf8) {
-//                print("--------------------------")
-//                print("response for (\(url): \(dataStr)")
-//                print("--------------------------")
-//            }
-            
-            completion?(dataResponse.value, dataResponse.error)
-        }
+        validatedDataRequest(from: request).responseJSON(completionHandler: { (dataResponse) in
+            completion?(T(JSON: dataResponse.value as? [String : Any] ?? [:]), dataResponse.error)
+        })
     }
     
-    func makeArrayRequest<T: BaseMappable>(_ request: HTTPRequest, completion: HTTPRequestCompletion<[T]>?) {
+    func makeArrayRequest<T: Mappable>(_ request: HTTPRequest, completion: HTTPRequestCompletion<[T]>?) {
         let url = (try? request.resource.asURL())?.absoluteString ?? ""
         
         print("--------------------------")
         print("sending request: \(url)")
         print("parameters: \(request.parameters as NSDictionary?)")
         print("--------------------------")
-        
-        validatedDataRequest(from: request).responseArray(completionHandler: { (dataResponse) in
-//            if let data = dataResponse.data, let dataStr = String.init(data: data, encoding: .utf8) {
-//                print("--------------------------")
-//                print("response for (\(url): \(dataStr)")
-//                print("--------------------------")
-//            }
-            
-            completion?(dataResponse.value, dataResponse.error)
-        })
+        validatedDataRequest(from: request).responseJSON { (dataResponse) in
+            var array = [T]()
+            let jsonArray = dataResponse.value as? [[String: Any]] ?? [[:]]
+            jsonArray.forEach {
+                if let element = T(JSON: $0) {
+                    array.append(element)
+                }
+            }
+            completion?(array, dataResponse.error)
+        }
     }
 }
 

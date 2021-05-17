@@ -31,7 +31,6 @@ Pod::Spec.new do |spec|
   spec.requires_arc = true
   
   spec.dependency 'Alamofire', '~> 5.0'
-  spec.dependency 'AlamofireObjectMapper', :git => "https://github.com/Koronaa/AlamofireObjectMapper.git", :branch => "master"
   spec.dependency 'SDWebImage', '~> 5.0'
   spec.dependency 'Cloudpayments'
   spec.dependency 'ReCaptcha'

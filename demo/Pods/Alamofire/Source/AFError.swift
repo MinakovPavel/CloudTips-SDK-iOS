@@ -57,6 +57,15 @@ public enum AFError: Error {
         case inputStreamReadFailed(error: Error)
     }
 
+    /// Represents unexpected input stream length that occur when encoding the `MultipartFormData`. Instances will be
+    /// embedded within an `AFError.multipartEncodingFailed` `.inputStreamReadFailed` case.
+    public struct UnexpectedInputStreamLength: Error {
+        /// The expected byte count to read.
+        public var bytesExpected: UInt64
+        /// The actual byte count read.
+        public var bytesRead: UInt64
+    }
+
     /// The underlying reason the `.parameterEncodingFailed` error occurred.
     public enum ParameterEncodingFailureReason {
         /// The `URLRequest` did not have a `URL` to encode.
@@ -154,6 +163,8 @@ public enum AFError: Error {
         case settingAnchorCertificatesFailed(status: OSStatus, certificates: [SecCertificate])
         /// During evaluation, creation of the revocation policy failed.
         case revocationPolicyCreationFailed
+        /// `SecTrust` evaluation failed with the associated `Error`, if one was produced.
+        case trustEvaluationFailed(error: Error?)
         /// Default evaluation failed with the associated `Output`.
         case defaultEvaluationFailed(output: Output)
         /// Host validation failed with the associated `Output`.
@@ -213,7 +224,7 @@ public enum AFError: Error {
 extension Error {
     /// Returns the instance cast as an `AFError`.
     public var asAFError: AFError? {
-        return self as? AFError
+        self as? AFError
     }
 
     /// Returns the instance cast as an `AFError`. If casting fails, a `fatalError` with the specified `message` is thrown.
@@ -226,7 +237,7 @@ extension Error {
 
     /// Casts the instance as `AFError` or returns `defaultAFError`
     func asAFError(or defaultAFError: @autoclosure () -> AFError) -> AFError {
-        return self as? AFError ?? defaultAFError()
+        self as? AFError ?? defaultAFError()
     }
 }
 
@@ -422,7 +433,7 @@ extension AFError {
 
     /// The `source` URL of a `.downloadedFileMoveFailed` error.
     public var sourceURL: URL? {
-        guard case .downloadedFileMoveFailed(_, let source, _) = self else { return nil }
+        guard case let .downloadedFileMoveFailed(_, source, _) = self else { return nil }
         return source
     }
 
@@ -430,6 +441,11 @@ extension AFError {
     public var destinationURL: URL? {
         guard case let .downloadedFileMoveFailed(_, _, destination) = self else { return nil }
         return destination
+    }
+
+    /// The download resume data of any underlying network error. Only produced by `DownloadRequest`s.
+    public var downloadResumeData: Data? {
+        (underlyingError as? URLError)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
     }
 }
 
@@ -597,6 +613,7 @@ extension AFError.ServerTrustFailureReason {
              .policyApplicationFailed,
              .settingAnchorCertificatesFailed,
              .revocationPolicyCreationFailed,
+             .trustEvaluationFailed,
              .certificatePinningFailed,
              .publicKeyPinningFailed,
              .customEvaluationFailed:
@@ -607,6 +624,8 @@ extension AFError.ServerTrustFailureReason {
     var underlyingError: Error? {
         switch self {
         case let .customEvaluationFailed(error):
+            return error
+        case let .trustEvaluationFailed(error):
             return error
         case .noRequiredEvaluator,
              .noCertificatesFound,
@@ -657,8 +676,8 @@ extension AFError: LocalizedError {
             """
         case let .sessionInvalidated(error):
             return "Session was invalidated with error: \(error?.localizedDescription ?? "No description.")"
-        case .serverTrustEvaluationFailed:
-            return "Server trust evaluation failed."
+        case let .serverTrustEvaluationFailed(reason):
+            return "Server trust evaluation failed due to reason: \(reason.localizedDescription)"
         case let .urlRequestValidationFailed(reason):
             return "URLRequest validation failed due to reason: \(reason.localizedDescription)"
         case let .createUploadableFailed(error):
@@ -804,15 +823,17 @@ extension AFError.ServerTrustFailureReason {
             return "Attempting to set the provided certificates as anchor certificates failed."
         case .revocationPolicyCreationFailed:
             return "Attempting to create a revocation policy failed."
+        case let .trustEvaluationFailed(error):
+            return "SecTrust evaluation failed with error: \(error?.localizedDescription ?? "None")"
         case let .defaultEvaluationFailed(output):
             return "Default evaluation failed for host \(output.host)."
         case let .hostValidationFailed(output):
             return "Host validation failed for host \(output.host)."
-        case .revocationCheckFailed(let output, _):
+        case let .revocationCheckFailed(output, _):
             return "Revocation check failed for host \(output.host)."
-        case .certificatePinningFailed(let host, _, _, _):
+        case let .certificatePinningFailed(host, _, _, _):
             return "Certificate pinning failed for host \(host)."
-        case .publicKeyPinningFailed(let host, _, _, _):
+        case let .publicKeyPinningFailed(host, _, _, _):
             return "Public key pinning failed for host \(host)."
         case let .customEvaluationFailed(error):
             return "Custom trust evaluation failed with error: \(error.localizedDescription)"
